@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="tr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23ffffff' stroke='%23f4a6c0' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='11' fill='%23e8739e'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="jarvis-icon.png">
+<meta name="apple-mobile-web-app-title" content="Jarvis">
+<meta name="theme-color" content="#FAF7F8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&display=swap" rel="stylesheet">
+<script>
+  // Remembered theme, applied before the page paints (light is the default)
+  try { if (localStorage.getItem('jarvis-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
+</script>
+<style>
+  /* =========================================================================
+     THEME — change colours here. Everything else on the page, including the
+     graph, reads these variables.
+     ========================================================================= */
+  :root {
+    --bg: #FAF7F8;            /* page background */
+    --card: #FFFFFF;          /* panels */
+    --ink: #111111;           /* main text */
+    --ink-strong: #1A1A1A;    /* dark accent */
+    --ink-2: rgba(17, 17, 17, 0.62);   /* secondary text */
+    --ink-3: rgba(17, 17, 17, 0.56);   /* small labels and hints */
+    --pink: #F4A6C0;          /* main accent */
+    --pink-strong: #E8739E;   /* active / hover / selected links */
+    --pink-soft: #FDE8EF;     /* selected rows, today, chips */
+    --pink-ink: #8E2A52;      /* text on pink-soft */
+    --sakura: #FFD6E3;        /* decoration */
+    --sakura-2: #FBC4D4;      /* decoration */
+    --line: #EEEEEE;          /* hairlines */
+    --shadow: 0 8px 30px rgba(17, 17, 17, 0.06);
+
+    /* graph */
+    --node: #2A2A2A;          /* ordinary note */
+    --cat-axa: #E8739E;       /* Internship */
+    --cat-gg: #F4A6C0;        /* Work */
+    --cat-uni: #FBC4D4;       /* University */
+    --cat-self: #1A1A1A;      /* Personal */
+    --petal-opacity: 1;
+
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --dur: 200ms;
+    --font: "Manrope", "Segoe UI", system-ui, sans-serif;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E0E10;
+    --card: #17171A;
+    --ink: #F5F2F3;
+    --ink-strong: #F5F2F3;
+    --ink-2: rgba(245, 242, 243, 0.66);
+    --ink-3: rgba(245, 242, 243, 0.58);
+    --pink: #F7A3C1;
+    --pink-strong: #F2709F;
+    --pink-soft: #33202A;
+    --pink-ink: #FFD6E3;
+    --sakura: #FFD6E3;
+    --sakura-2: #FBC4D4;
+    --line: #2A2A2E;
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    --node: #CFCACC;
+    --cat-axa: #F2709F;
+    --cat-gg: #F7A3C1;
+    --cat-uni: #FBC4D4;
+    --cat-self: #F5F2F3;
+    --petal-opacity: 0.45;
+  }
+
+  /* ---------- Base ---------- */
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-button { background: transparent; height: 0; width: 0; }
+  ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.2); border-radius: 6px; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: var(--font); font-weight: 400; font-variant-numeric: tabular-nums;
+    transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease); }
+  button, input { font-family: inherit; }
+  h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: 0; }
+  svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5;
+    stroke-linecap: round; stroke-linejoin: round; display: block; }
+  :focus-visible { outline: 2px solid var(--pink-strong); outline-offset: 2px; }
+
+  /* ---------- Graph, petals, labels ---------- */
+  #petals { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; opacity: var(--petal-opacity); }
+  .petal { position: absolute; top: -6vh; animation: fall linear infinite; }
+  .petal svg { display: block; width: 100%; height: 100%; animation: sway ease-in-out infinite alternate; }
+  @keyframes fall { to { transform: translateY(114vh); } }
+  @keyframes sway { from { transform: translateX(-18px) rotate(-40deg); } to { transform: translateX(18px) rotate(70deg); } }
+
+  #graph { position: fixed; inset: 0; z-index: 1; }
+  #labels { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+  #labels span, .scene-tooltip, .float-tooltip-kap {
+    font-family: var(--font) !important; font-size: 12px !important; font-weight: 500 !important; line-height: 1.3 !important;
+    color: var(--ink) !important; background: color-mix(in srgb, var(--card) 82%, transparent) !important;
+    padding: 3px 10px !important; border-radius: 999px !important; white-space: nowrap; }
+  #labels span { position: absolute; left: 0; top: 0; display: none; }
+
+  /* ---------- Cards ---------- */
+  .card { position: fixed; z-index: 3; background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 22px;
+    transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+  .label { font-size: 11px; font-weight: 500; letter-spacing: 0.04em; color: var(--ink-3); }
+  #dock { display: contents; }
+
+  /* Theme switch */
+  #theme-toggle { position: fixed; z-index: 3; top: 24px; right: 24px; width: 40px; height: 40px; padding: 0; border: 0;
+    border-radius: 50%; background: var(--card); color: var(--ink); box-shadow: var(--shadow); cursor: pointer;
+    display: grid; place-items: center; transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease); }
+  #theme-toggle:hover { color: var(--pink-strong); }
+  #theme-toggle .moon, :root[data-theme="dark"] #theme-toggle .sun { display: none; }
+  :root[data-theme="dark"] #theme-toggle .moon { display: block; }
+
+  /* Filter */
+  #filters { top: 80px; right: 24px; width: 248px; }
+  #filter-list { display: grid; gap: 6px; margin-top: 14px; }
+  #filters button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; border: 0;
+    border-radius: 12px; background: var(--pink-soft); color: var(--ink); font-size: 13px; font-weight: 500;
+    cursor: pointer; text-align: left; transition: opacity var(--dur) var(--ease), background-color var(--dur) var(--ease); }
+  #filters .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+  #filters .count { margin-left: auto; font-size: 12px; color: var(--ink-2); }
+  #filters button.off { background: transparent; opacity: 0.4; }
+  #filters button.off:hover { opacity: 0.7; }
+
+  /* This week */
+  #week { left: 24px; bottom: 24px; width: 304px; max-height: min(54vh, 560px); display: none; flex-direction: column; }
+  #week.has-events { display: flex; }
+  #week .updated { margin-top: 4px; }
+  #week-list { margin: 14px -8px -8px; padding: 0 8px 8px; overflow-y: auto; display: grid; gap: 6px; }
+  #week .day-group { padding: 10px 12px; border-radius: 14px; }
+  #week .day-group.today { background: var(--pink-soft); }
+  #week .day { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  #week .day-group.today .day { color: var(--ink); }
+  #week .day-group.today .day::after { content: " · bugün"; text-transform: none; letter-spacing: 0; }
+  #week .event { position: relative; display: grid; gap: 1px; margin-top: 10px;
+    padding-left: 13px; font-size: 13px; line-height: 1.4; }
+  #week .time { font-size: 12px; }
+  #week .event::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 3px; border-radius: 3px;
+    background: var(--ink-3); }
+  #week .event.cat-axa::before { background: var(--cat-axa); }
+  #week .event.cat-gg::before { background: var(--cat-gg); }
+  #week .event.cat-uni::before { background: var(--cat-uni); }
+  #week .time { color: var(--ink-2); white-space: nowrap; }
+  #week .place { display: block; margin-top: 2px; font-size: 11px; color: var(--ink-3); }
+  #week a.wl { color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--pink);
+    text-underline-offset: 3px; transition: text-decoration-color var(--dur) var(--ease); }
+  #week a.wl:hover { text-decoration-color: var(--pink-strong); }
+
+  /* Jarvis: ring, answer, question box */
+  #assistant { right: 24px; bottom: 24px; width: 328px; display: grid; gap: 16px; }
+  .assistant-head { display: flex; align-items: center; gap: 14px; }
+  #ring { position: relative; flex: none; width: 60px; height: 60px; padding: 0; border: 1.5px solid var(--sakura-2);
+    border-radius: 50%; background: var(--card); cursor: pointer; display: grid; place-items: center;
+    transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  #ring:hover { border-color: var(--pink-strong); }
+  #ring svg { width: 30px; height: 30px; display: block; }
+  #ring .petal-shape { fill: var(--sakura); stroke: var(--pink); stroke-width: 0.7; stroke-linejoin: round; }
+  #ring .heart { fill: var(--pink-strong); }
+  #ring::after { content: ""; position: absolute; inset: -1.5px; border: 1.5px solid var(--pink); border-radius: 50%;
+    opacity: 0; pointer-events: none; }
+  #assistant:not([data-state="standby"]) #ring { border-color: var(--pink); }
+  #assistant[data-state="capture"] #ring, #assistant[data-state="thinking"] #ring, #assistant[data-state="speaking"] #ring {
+    border-color: var(--pink-strong); animation: pulse 2.4s var(--ease) infinite; }
+  #assistant[data-state="capture"] #ring::after, #assistant[data-state="thinking"] #ring::after,
+  #assistant[data-state="speaking"] #ring::after { animation: ripple 2.4s var(--ease) infinite; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  @keyframes ripple { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(1.5); opacity: 0; } }
+  #ring-status { margin-top: 3px; text-transform: lowercase; }
+  #ring-status::first-letter { text-transform: uppercase; }
+  #ring-status { display: block; }
+
+  #answer { position: relative; padding-top: 16px; border-top: 1px solid var(--line); max-height: min(30vh, 280px);
+    overflow-x: hidden; overflow-y: auto; font-size: 13.5px; line-height: 1.6; }
+  #answer[hidden] { display: none; }
+  #answer .question { margin: 0 28px 8px 0; }
+  #answer .text { white-space: pre-line; color: var(--ink); }
+  #answer .text a.wl { color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--pink);
+    text-underline-offset: 3px; }
+  #answer .sources { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  #answer .sources:empty { display: none; }
+  #answer .sources a { padding: 3px 11px; border-radius: 999px; background: var(--pink-soft); color: var(--pink-ink);
+    font-size: 12px; font-weight: 500; cursor: pointer; transition: color var(--dur) var(--ease); }
+  #answer .sources a:hover { color: var(--ink); }
+  #answer .engine { margin-top: 10px; font-size: 10.5px; color: var(--ink-3); }
+  #answer .engine:empty { display: none; }
+  #answer-close, #close { position: absolute; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+    background: none; color: var(--ink-2); cursor: pointer; display: grid; place-items: center;
+    transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease); }
+  #answer-close:hover, #close:hover { background: var(--pink-soft); color: var(--ink); }
+  #answer-close { top: 10px; right: 0; }
+
+  #ask { display: flex; align-items: center; gap: 8px; padding: 5px 5px 5px 16px; border: 1px solid var(--line);
+    border-radius: 999px; transition: border-color var(--dur) var(--ease); }
+  #ask:focus-within { border-color: var(--pink); }
+  #ask input { flex: 1; min-width: 0; padding: 7px 0; background: none; border: 0; outline: 0; color: var(--ink); font-size: 13.5px; }
+  #ask input::placeholder { color: var(--ink-3); }
+  #ask button { flex: none; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: var(--pink);
+    color: #111111; cursor: pointer; display: grid; place-items: center; transition: background-color var(--dur) var(--ease); }
+  #ask button:hover { background: var(--pink-strong); }
+  #mic-hint { margin-top: -6px; min-height: 15px; font-size: 11px; line-height: 1.4; color: var(--ink-3); }
+
+  /* Note */
+  #note { z-index: 4; top: 24px; left: 24px; bottom: 24px; width: min(420px, calc(100vw - 48px)); padding: 0;
+    display: none; flex-direction: column; }
+  #note.open { display: flex; }
+  #note header { padding: 24px 24px 16px; border-bottom: 1px solid var(--line); }
+  #note .folder { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.04em; color: var(--ink-3); }
+  #note .folder i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  #note h1 { margin: 10px 36px 8px 0; font-size: 22px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; }
+  #note .meta { font-size: 12px; color: var(--ink-2); }
+  #note .tag { display: inline-block; margin: 10px 6px 0 0; padding: 2px 10px; border-radius: 999px;
+    background: var(--bg); font-size: 12px; color: var(--ink-2); }
+  #close { top: 18px; right: 18px; }
+  #body { padding: 8px 24px 24px; overflow-y: auto; font-size: 14px; line-height: 1.65; }
+  #body h1 { display: none; }
+  #body h2 { margin: 22px 0 8px; font-size: 13px; font-weight: 700; color: var(--ink); }
+  #body h3 { margin: 16px 0 4px; font-size: 13.5px; font-weight: 500; }
+  #body p { margin: 8px 0; }
+  #body ul, #body ol { margin: 6px 0; padding-left: 20px; }
+  #body li { margin: 4px 0; }
+  #body li::marker { color: var(--pink-strong); }
+  #body strong { font-weight: 700; }
+  #body table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  #body th, #body td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  #body th { color: var(--ink-3); font-weight: 500; font-size: 11px; letter-spacing: 0.04em; }
+  #body code { padding: 1px 6px; border-radius: 6px; background: var(--bg); font-family: inherit; font-size: 13px; }
+  #body a.wl { color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--pink);
+    text-underline-offset: 3px; transition: text-decoration-color var(--dur) var(--ease); }
+  #body a.wl:hover { text-decoration-color: var(--pink-strong); }
+  #body .missing { color: var(--ink-3); }
+
+  #hint { position: fixed; z-index: 2; left: 50%; bottom: 20px; transform: translateX(-50%); font-size: 11px; color: var(--ink-3);
+    pointer-events: none; white-space: nowrap; }
+  #error { position: fixed; inset: 0; z-index: 6; display: none; align-items: center; justify-content: center; padding: 24px;
+    text-align: center; line-height: 1.7; font-size: 14px; }
+
+  /* ---------- Narrow screens: panels become cards along the bottom ---------- */
+  @media (max-width: 1180px) { #hint { display: none; } }
+  @media (max-width: 720px) {
+    #dock { display: flex; flex-direction: column; gap: 12px; position: fixed; z-index: 3; left: 0; right: 0; bottom: 0;
+      max-height: 56vh; overflow-y: auto; padding: 12px; }
+    #dock > .card { position: static; width: auto; max-height: none; padding: 18px; }
+    #assistant { order: 1; } #week { order: 2; } #filters { order: 3; }
+    #week-list { overflow: visible; }
+    #theme-toggle { top: 12px; right: 12px; }
+    #note { z-index: 5; top: 12px; left: 12px; right: 12px; bottom: 12px; width: auto; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #petals { display: none; }
+    #ring, #ring::after { animation: none !important; }
+    * { transition-duration: 1ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="petals" aria-hidden="true"></div>
+<div id="graph"></div>
+<div id="labels"></div>
+
+<button id="theme-toggle" type="button" aria-label="Koyu moda geç" title="Açık / koyu">
+  <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  <svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5z"/></svg>
+</button>
+
+<div id="dock">
+<section id="assistant" class="card" data-state="standby" aria-label="Jarvis">
+  <div class="assistant-head">
+    <button id="ring" type="button" aria-label="Mikrofonu aç ya da kapat" title="Tıkla ve konuş. Dinlerken tıklarsan mikrofon kapanır.">
+      <svg viewBox="-12 -12 24 24" aria-hidden="true">
+        <path class="petal-shape" d="M0 -1.6C3.2 -4.4 3.7 -8 1.3 -10.4L0 -9.1L-1.3 -10.4C-3.7 -8 -3.2 -4.4 0 -1.6Z"/>
+        <path class="petal-shape" transform="rotate(72)" d="M0 -1.6C3.2 -4.4 3.7 -8 1.3 -10.4L0 -9.1L-1.3 -10.4C-3.7 -8 -3.2 -4.4 0 -1.6Z"/>
+        <path class="petal-shape" transform="rotate(144)" d="M0 -1.6C3.2 -4.4 3.7 -8 1.3 -10.4L0 -9.1L-1.3 -10.4C-3.7 -8 -3.2 -4.4 0 -1.6Z"/>
+        <path class="petal-shape" transform="rotate(216)" d="M0 -1.6C3.2 -4.4 3.7 -8 1.3 -10.4L0 -9.1L-1.3 -10.4C-3.7 -8 -3.2 -4.4 0 -1.6Z"/>
+        <path class="petal-shape" transform="rotate(288)" d="M0 -1.6C3.2 -4.4 3.7 -8 1.3 -10.4L0 -9.1L-1.3 -10.4C-3.7 -8 -3.2 -4.4 0 -1.6Z"/>
+        <circle class="heart" r="1.3"/>
+      </svg>
+    </button>
+    <div>
+      <h2>Jarvis</h2>
+      <span class="label" id="ring-status" lang="en">STANDBY</span>
+    </div>
+  </div>
+  <div id="answer" aria-live="polite" hidden>
+    <button id="answer-close" type="button" aria-label="Cevabı kapat">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="question label" id="answer-question"></div>
+    <div class="text" id="answer-text"></div>
+    <div class="sources" id="answer-sources"></div>
+    <div class="engine" id="answer-engine"></div>
+  </div>
+  <form id="ask">
+    <input id="ask-input" type="text" placeholder="Jarvis'e sor…" aria-label="Jarvis'e sor" autocomplete="off" maxlength="500">
+    <button type="submit" aria-label="Gönder">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    </button>
+  </form>
+  <div id="mic-hint">Sesle sormak için çiçeğe tıkla ve konuş.</div>
+</section>
+
+<nav id="filters" class="card" aria-label="Filtre">
+  <h2>Filtre</h2>
+  <div id="filter-list"></div>
+</nav>
+
+<section id="week" class="card" aria-label="Bu hafta">
+  <h2>Bu hafta</h2>
+  <div class="updated label" id="week-updated"></div>
+  <div id="week-list"></div>
+</section>
+</div>
+
+<aside id="note" class="card" aria-live="polite">
+  <button id="close" type="button" aria-label="Kapat">
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </button>
+  <header>
+    <span class="folder" id="note-folder"></span>
+    <h1 id="note-title"></h1>
+    <div class="meta" id="note-meta"></div>
+    <div id="note-tags"></div>
+  </header>
+  <div id="body"></div>
+</aside>
+
+<div id="hint">Tıkla: notu aç · Sürükle: döndür · Tekerlek: yaklaş</div>
+<div id="error"></div>
+
+<script src="graph.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.77.0/dist/3d-force-graph.min.js"></script>
+<script>
+(function () {
+  // The four main nodes and the theme variable that colours each of them.
+  const HUBS = [
+    { name: 'Internship',             color: '--cat-axa' },
+    { name: 'Work',              color: '--cat-gg' },
+    { name: 'University', color: '--cat-uni' },
+    { name: 'Personal',             color: '--cat-self' }
+  ];
+  const HUB_VAR = Object.fromEntries(HUBS.map(h => [h.name, h.color]));
+  const FALLBACK_VAR = '--pink';
+  const NODE_SIZE = 2.2;                       // radius unit: notes come out about 6px wide,
+  const HUB_VAL = 27;                            // main nodes three times wider (about 18px)
+  const HUB_RADIUS = Math.cbrt(HUB_VAL) * NODE_SIZE;
+
+  function fail(message) {
+    const box = document.getElementById('error');
+    box.style.display = 'flex';
+    box.innerHTML = '<div>' + message + '</div>';
+  }
+  if (!window.GRAPH_DATA) {
+    return fail('graph.js bulunamadı.<br>Önce <b>Jarvis</b> simgesine ya da <b>Jarvis-Grafik.bat</b> dosyasına çift tıkla.');
+  }
+  if (typeof ForceGraph3D === 'undefined') {
+    return fail('3d-force-graph kütüphanesi yüklenemedi.<br>İnternet bağlantını kontrol edip sayfayı yenile.');
+  }
+
+  const data = window.GRAPH_DATA;
+  const nodes = data.nodes.map(n => ({ ...n }));
+  const links = data.links.map(l => ({ ...l }));
+  const byId = new Map(nodes.map(n => [n.id.toLowerCase(), n]));
+  const hubNodes = nodes.filter(n => n.isHub);
+  const degree = {};
+  const neighbors = new Map(nodes.map(n => [n.id, new Set()]));
+  links.forEach(l => {
+    degree[l.source] = (degree[l.source] || 0) + 1;
+    degree[l.target] = (degree[l.target] || 0) + 1;
+    if (neighbors.has(l.source) && neighbors.has(l.target)) {
+      neighbors.get(l.source).add(l.target);
+      neighbors.get(l.target).add(l.source);
+    }
+  });
+
+  const hidden = new Set();
+  const highlighted = new Set();   // notes used in Jarvis's latest answer
+  const visible = n => !hidden.has(n.hub);
+  const endNode = end => (typeof end === 'object' ? end : byId.get(String(end).toLowerCase()));
+  const toneVar = n => 'var(' + (HUB_VAR[n.isHub ? n.id : n.hub] || FALLBACK_VAR) + ')';
+
+  // ---------- Graph look: every colour comes from the theme variables ----------
+  const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  function rgba(hex, alpha) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h.length === 3 ? h.replace(/./g, '$&$&') : h, 16);
+    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + alpha + ')';
+  }
+  let theme = {};
+  function readTheme() {
+    theme = {
+      node: cssVar('--node'),
+      link: cssVar('--ink-strong'),
+      accent: cssVar('--pink-strong'),
+      fallback: cssVar(FALLBACK_VAR),
+      hubs: Object.fromEntries(HUBS.map(h => [h.name, cssVar(h.color)]))
+    };
+  }
+  readTheme();
+
+  // Hovered or opened note: it and its neighbours stay, everything else fades
+  let hoverNode = null, selectedNode = null;
+  const focusNode = () => hoverNode || selectedNode;
+  const isFaded = n => {
+    const focus = focusNode();
+    return !!focus && n !== focus && !neighbors.get(focus.id).has(n.id);
+  };
+  const nodeColor = n => {
+    const base = highlighted.has(n) ? theme.accent : n.isHub ? (theme.hubs[n.id] || theme.fallback) : theme.node;
+    return rgba(base, isFaded(n) ? 0.2 : 1);
+  };
+  const linkColor = l => {
+    const focus = focusNode();
+    if (!focus) return rgba(theme.link, 0.1);
+    return endNode(l.source) === focus || endNode(l.target) === focus ? rgba(theme.accent, 0.6) : rgba(theme.link, 0.03);
+  };
+
+  const Graph = new ForceGraph3D(document.getElementById('graph'), { controlType: 'orbit' })
+    .backgroundColor('rgba(0,0,0,0)')            // the page background (--bg) shows through
+    .showNavInfo(false)
+    .warmupTicks(120)
+    .cooldownTime(3000)
+    .graphData({ nodes, links })
+    .nodeLabel(n => (n.isHub ? '' : esc(n.title)))
+    .nodeRelSize(NODE_SIZE)
+    .nodeColor(nodeColor)
+    .nodeVal(n => (n.isHub ? HUB_VAL : 1))
+    .nodeOpacity(1)
+    .nodeResolution(24)
+    .nodeVisibility(visible)
+    .linkColor(linkColor)
+    .linkOpacity(1)
+    .linkWidth(0)
+    .linkVisibility(l => visible(endNode(l.source)) && visible(endNode(l.target)))
+    .onNodeHover(node => {
+      hoverNode = node || null;
+      document.getElementById('graph').style.cursor = node ? 'pointer' : '';
+      refreshColors();
+    })
+    .onNodeClick(openNote)
+    .onBackgroundClick(closeNote);
+
+  function refreshColors() {
+    Graph.nodeColor(Graph.nodeColor()).linkColor(Graph.linkColor());
+  }
+  // Flat circles: even light from every side instead of a shaded 3D ball
+  Graph.lights().forEach(light => {
+    if (light.isDirectionalLight) light.intensity = 0;
+    if (light.isAmbientLight) { light.color.set('#ffffff'); light.intensity = Math.PI; }
+  });
+
+  // Notes gather around their own main node; ordinary [[links]] pull only gently
+  Graph.d3Force('charge').strength(n => (n.isHub ? -900 : -160));
+  Graph.d3Force('link')
+    .distance(l => (l.hubLink ? 55 : 110))
+    .strength(l => (l.hubLink ? 0.7 : 0.02));
+
+  // Very slow, calm self-rotation
+  const controls = Graph.controls();
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.15;
+
+  // Pull the camera back far enough to see every note
+  function showAll(ms) {
+    const radius = Math.max(60, ...nodes.map(n => Math.hypot(n.x || 0, n.y || 0, n.z || 0)));
+    Graph.cameraPosition({ x: 0, y: 0, z: radius * 2.6 }, { x: 0, y: 0, z: 0 }, ms);
+  }
+  let fitted = false;
+  Graph.onEngineStop(() => {
+    if (!fitted) { fitted = true; showAll(800); }
+  });
+  window.addEventListener('resize', () => Graph.width(window.innerWidth).height(window.innerHeight));
+
+  // Notes used in the latest answer are drawn in the accent colour and a little larger
+  function setHighlight(ids) {
+    highlighted.clear();
+    (ids || []).forEach(id => {
+      const node = byId.get(String(id).toLowerCase());
+      if (node) highlighted.add(node);
+    });
+    refreshColors();
+  }
+
+  // Names above the main nodes, and the soft grow of hovered / opened / answered notes
+  const labelLayer = document.getElementById('labels');
+  const labelEls = hubNodes.map(n => {
+    const el = document.createElement('span');
+    el.textContent = n.title;
+    labelLayer.appendChild(el);
+    return el;
+  });
+  const lookDir = Graph.camera().position.clone();
+  (function everyFrame() {
+    const camera = Graph.camera();
+    camera.getWorldDirection(lookDir);
+    hubNodes.forEach((n, i) => {
+      const el = labelEls[i];
+      const inFront = n.x !== undefined &&
+        (n.x - camera.position.x) * lookDir.x + (n.y - camera.position.y) * lookDir.y +
+        (n.z - camera.position.z) * lookDir.z > 0;
+      if (!inFront || hidden.has(n.hub)) { el.style.display = 'none'; return; }
+      const center = Graph.graph2ScreenCoords(n.x, n.y, n.z);
+      const top = Graph.graph2ScreenCoords(n.x, n.y + HUB_RADIUS, n.z);
+      const radius = Math.hypot(top.x - center.x, top.y - center.y);
+      el.style.display = 'block';
+      el.style.opacity = isFaded(n) ? 0.35 : 1;
+      el.style.transform = 'translate(' + center.x + 'px,' + (center.y - radius - 6) + 'px) translate(-50%,-100%)';
+    });
+    nodes.forEach(n => {
+      const obj = n.__threeObj;
+      if (!obj) return;
+      const target = n === hoverNode || n === selectedNode ? (n.isHub ? 1.2 : 1.8) : highlighted.has(n) ? 1.8 : 1;
+      const current = obj.scale.x;
+      if (Math.abs(target - current) > 0.005) obj.scale.setScalar(current + (target - current) * 0.2);
+    });
+    requestAnimationFrame(everyFrame);
+  })();
+
+  // A few sakura petals drifting down behind the graph
+  (function petals() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const layer = document.getElementById('petals');
+    const random = (min, max) => min + Math.random() * (max - min);
+    for (let i = 0; i < 10; i++) {
+      const petal = document.createElement('div');
+      const size = random(10, 24);
+      petal.className = 'petal';
+      petal.style.cssText = 'left:' + random(0, 100) + '%;width:' + size + 'px;height:' + size + 'px;opacity:' +
+        random(0.3, 0.5).toFixed(2) + ';animation-duration:' + random(45, 85) + 's;animation-delay:-' + random(0, 85) + 's';
+      petal.innerHTML = '<svg viewBox="0 0 20 20" style="animation-duration:' + random(7, 14) + 's;animation-delay:-' +
+        random(0, 10) + 's"><path d="M10 0.5C16 5.5 17 13 10 19.5C3 13 4 5.5 10 0.5Z" fill="var(' +
+        (i % 2 ? '--sakura' : '--sakura-2') + ')"/></svg>';
+      layer.appendChild(petal);
+    }
+  })();
+
+  // Light / dark switch
+  const themeToggle = document.getElementById('theme-toggle');
+  function syncThemeToggle() {
+    themeToggle.setAttribute('aria-label', document.documentElement.dataset.theme === 'dark' ? 'Açık moda geç' : 'Koyu moda geç');
+  }
+  themeToggle.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('jarvis-theme', next); } catch (e) { /* private window: just not remembered */ }
+    syncThemeToggle();
+    readTheme();
+    refreshColors();
+  });
+  syncThemeToggle();
+
+  // Filter panel: one row per main node
+  const list = document.getElementById('filter-list');
+  const known = new Set(HUBS.map(h => h.name));
+  const rows = HUBS.concat(hubNodes.filter(n => !known.has(n.id)).map(n => ({ name: n.id, color: FALLBACK_VAR })));
+  rows.forEach(h => {
+    const count = nodes.filter(n => n.hub === h.name && !n.isHub).length;
+    const button = document.createElement('button');
+    button.style.setProperty('--c', 'var(' + h.color + ')');
+    button.setAttribute('aria-pressed', 'true');
+    button.innerHTML = '<span class="dot"></span><span>' + esc(h.name) + '</span><span class="count">' + count + '</span>';
+    button.addEventListener('click', () => {
+      const off = !hidden.has(h.name);
+      if (off) hidden.add(h.name); else hidden.delete(h.name);
+      button.classList.toggle('off', off);
+      button.setAttribute('aria-pressed', String(!off));
+      Graph.nodeVisibility(Graph.nodeVisibility()).linkVisibility(Graph.linkVisibility());
+    });
+    list.appendChild(button);
+  });
+
+  // "This week" panel: events copied from Google Calendar into Notes/Takvim.md
+  (function weekPanel() {
+    const calendar = data.calendar || {};
+    const events = calendar.events || [];
+    if (!events.length) return;
+    const now = new Date();
+    const today = (now.toLocaleDateString('tr-TR', { weekday: 'long' }) + ' ' + now.getDate() + ' ' +
+      now.toLocaleDateString('tr-TR', { month: 'long' })).toLocaleLowerCase('tr');
+    // Which coloured stripe an event gets
+    const category = e => /(intern|staj)/i.test(e.title) ? 'axa'
+      : /gg\s*clan|koçluk/i.test(e.title) ? 'gg'
+      : (e.place || /^[A-ZÇĞİÖŞÜ]{2,5}\s?\d{3}\b|ders|tekrar|sınav/i.test(e.title)) ? 'uni' : 'self';
+    const weekList = document.getElementById('week-list');
+    let html = '', lastDay = null;
+    events.forEach(e => {
+      if (e.day !== lastDay) {
+        if (lastDay !== null) html += '</div>';
+        lastDay = e.day;
+        const isToday = e.day.toLocaleLowerCase('tr') === today;
+        html += '<div class="day-group' + (isToday ? ' today' : '') + '"><div class="day">' + esc(e.day) + '</div>';
+      }
+      html += '<div class="event cat-' + category(e) + '"><span class="time">' + esc(e.time) + '</span><span>' + inline(e.title) +
+        (e.place ? '<span class="place">' + esc(e.place) + '</span>' : '') + '</span></div>';
+    });
+    weekList.innerHTML = html + '</div>';
+    weekList.addEventListener('click', e => {
+      const link = e.target.closest('a.wl');
+      const node = link && byId.get(link.dataset.id.toLowerCase());
+      if (node) openNote(node);
+    });
+    if (calendar.updated) document.getElementById('week-updated').textContent = 'Google Calendar · ' + calendar.updated;
+    document.getElementById('week').classList.add('has-events');
+  })();
+
+  // ---------------------------------------------------------------------------
+  // Jarvis assistant: a typed or spoken question is answered from the notes,
+  // shown on screen, read aloud, and the notes it used light up in the graph.
+  // ---------------------------------------------------------------------------
+  const assistant = document.getElementById('assistant');
+  const ringStatus = document.getElementById('ring-status');
+  const askInput = document.getElementById('ask-input');
+  const micHint = document.getElementById('mic-hint');
+  const answerBox = document.getElementById('answer');
+  const STATUS = { standby: 'STANDBY', wake: 'LISTENING', capture: 'GO AHEAD', thinking: 'THINKING', speaking: 'SPEAKING' };
+  // "Jarvis" and the ways Turkish recognition tends to spell it (carvis, çarvis, cervis, yarvis...)
+  const WAKE_WORD = /(?:^|\s)(?:[jcçşy]|dj|g)[ae]r[vwf][iıeü][sz]\S*/i;
+  const HINT_OFF = 'Sesle sormak için çiçeğe tıkla ve konuş.';
+  const HINT_WAKE = '“Jarvis” de ya da çiçeğe tıkla, sonra sor.';
+  const HINT_CAPTURE = 'Dinliyorum… Susunca cevaplarım.';
+  let state = 'standby';
+  let micOn = false;
+
+  function setState(next) {
+    state = next;
+    assistant.dataset.state = next;
+    ringStatus.textContent = STATUS[next];
+  }
+  const restingState = () => (micOn ? 'wake' : 'standby');
+
+  // --- Answering ---
+  async function ask(question) {
+    question = question.trim();
+    if (!question || state === 'thinking') return;
+    stopSpeaking();
+    pauseListening();
+    setState('thinking');
+    showAnswer(question, null);
+    let result;
+    try {
+      const response = await fetch('ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question })
+      });
+      if (!response.ok) throw new Error('ask failed: ' + response.status);
+      result = await response.json();
+      result.engine = result.engine || 'Claude';
+    } catch (err) {
+      result = localAnswer(question);   // no server or Claude not signed in: plain search in the notes
+    }
+    askInput.value = '';
+    showAnswer(question, result);
+    setHighlight(result.notes);
+    speak(result.answer);
+  }
+
+  function showAnswer(question, result) {
+    answerBox.hidden = false;
+    document.getElementById('answer-question').textContent = question;
+    document.getElementById('answer-text').innerHTML = result ? inline(result.answer) : 'Düşünüyorum…';
+    document.getElementById('answer-sources').innerHTML = result
+      ? result.notes.map(id => {
+          const node = byId.get(id.toLowerCase());
+          return node ? '<a class="wl" data-id="' + esc(node.id) + '">' + esc(node.title) + '</a>' : '';
+        }).join('')
+      : '';
+    document.getElementById('answer-engine').textContent = result ? result.engine : '';
+    answerBox.scrollTop = 0;
+  }
+  answerBox.addEventListener('click', e => {
+    const link = e.target.closest('a.wl');
+    const node = link && byId.get(link.dataset.id.toLowerCase());
+    if (node) openNote(node);
+  });
+  document.getElementById('answer-close').addEventListener('click', () => {
+    answerBox.hidden = true;
+    stopSpeaking();
+    setHighlight([]);
+  });
+  document.getElementById('ask').addEventListener('submit', e => {
+    e.preventDefault();
+    ask(askInput.value);
+  });
+
+  // Fallback without Claude: find the notes and lines that share the most words with the question
+  const STOP_WORDS = new Set(('ve ile bir bu şu o ne nedir nasıl neden niye mi mı mu mü için kaç hangi kim ben benim bana ' +
+    'beni var yok de da ki en çok daha ya veya ama gibi kadar olan olarak neler nerede zaman hakkında söyle anlat jarvis').split(' '));
+  const wordsOf = text => text.toLocaleLowerCase('tr').split(/[^a-z0-9çğıöşü]+/).filter(Boolean);
+  const stemOf = word => (word.length > 4 ? word.slice(0, 4) : word);   // rough Turkish stemming: drop the suffixes
+  const tidyLine = line => line.replace(/^[-*]\s+|^\d+\.\s+/, '').replace(/^\||\|$/g, '').split('|')
+    .map(cell => cell.trim()).filter(Boolean).join(', ');
+  // "What is on Wednesday / today / tomorrow?" is answered straight from the calendar copy
+  const DAY_NAMES = ['pazartesi', 'salı', 'çarşamba', 'perşembe', 'cumartesi', 'cuma', 'pazar'];
+  function dayAnswer(question) {
+    const words = wordsOf(question);
+    const dayName = offset => new Date(Date.now() + offset * 86400000)
+      .toLocaleDateString('tr-TR', { weekday: 'long' }).toLocaleLowerCase('tr');
+    let day = words.some(w => w.startsWith('bugün')) ? dayName(0) : words.some(w => w.startsWith('yarın')) ? dayName(1) : null;
+    if (!day) day = DAY_NAMES.find(name => words.some(w => w.startsWith(name)));
+    const events = (data.calendar && data.calendar.events) || [];
+    if (!day || !events.length) return null;
+    const todays = events.filter(e => e.day.toLocaleLowerCase('tr').split(' ')[0] === day);
+    const label = day.charAt(0).toLocaleUpperCase('tr') + day.slice(1);
+    const used = new Set(byId.has('takvim') ? ['Takvim'] : []);
+    todays.forEach(e => (e.title.match(/\[\[([^\]|#]+)/g) || []).forEach(m => used.add(m.slice(2).trim())));
+    return {
+      answer: todays.length
+        ? todays[0].day + ': ' + todays.map(e => e.time + ' ' + e.title).join('. ') + '.'
+        : label + ' günü için takvimde bir şey görünmüyor.',
+      notes: [...used],
+      engine: 'Takvimden (Claude bağlı değil)'
+    };
+  }
+
+  function localAnswer(question) {
+    const fromCalendar = dayAnswer(question);
+    if (fromCalendar) return fromCalendar;
+    const stems = [...new Set(wordsOf(question).filter(w => !STOP_WORDS.has(w) && w.length > 1).map(stemOf))];
+    const hits = words => stems.filter(s => words.some(w => w.startsWith(s))).length;
+    const scored = nodes.filter(n => n.content).map(n => {
+      const lines = n.content.replace(/^[^-]?---[\s\S]*?\n---/, '').split(/\r?\n/)
+        .map(l => l.trim()).filter(l => l && !l.startsWith('#') && !/^\|?[-| :]+\|?$/.test(l))
+        .map(text => ({ text, score: hits(wordsOf(text)) }));
+      const best = lines.reduce((a, b) => (b.score > a.score ? b : a), { text: '', score: 0 });
+      const score = hits(wordsOf(n.title)) * 4 + hits(wordsOf((n.tags || []).join(' '))) * 2 +
+        lines.reduce((sum, l) => sum + Math.min(l.score, 2), 0);
+      return { node: n, score, best };
+    }).filter(s => s.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
+    const engine = 'Basit arama (Claude bağlı değil)';
+    if (!stems.length || !scored.length) {
+      return { answer: 'Notlarında bununla ilgili bir şey bulamadım.', notes: [], engine };
+    }
+    const topLine = Math.max(...scored.map(s => s.best.score));
+    const answer = scored.filter(s => s.best.score > 0 && s.best.score >= topLine).slice(0, 2)
+      .map(s => s.node.title + ': ' + tidyLine(s.best.text))
+      .join('\n') || 'En ilgili notlar: ' + scored.map(s => s.node.title).join(', ') + '.';
+    return { answer, notes: scored.map(s => s.node.id), engine };
+  }
+
+  // --- Reading the answer aloud ---
+  // One audio player for every answer. Phones only let a page play sound after a tap, so the first
+  // tap or key press "unlocks" this player with a moment of silence; later answers reuse it.
+  const player = new Audio();
+  let audio = null, speechRun = 0, playerUnlocked = false;
+  function unlockPlayer() {
+    if (playerUnlocked) return;
+    playerUnlocked = true;
+    player.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+    player.play().catch(() => {});
+  }
+  document.addEventListener('pointerdown', unlockPlayer, { once: true });
+  document.addEventListener('keydown', unlockPlayer, { once: true });
+  async function speak(text) {
+    const run = ++speechRun;   // a newer answer or a "stop" cancels this one
+    const done = () => {
+      if (run !== speechRun) return;
+      setState(restingState());
+      if (micOn) micHint.textContent = HINT_WAKE;
+      resumeListening();
+    };
+    const clean = text.replace(/\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g, (m, a, b) => b || a).replace(/[*_`#]/g, '');
+    setState('speaking');
+
+    // 1) ElevenLabs voice through the local server
+    try {
+      const response = await fetch('speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: clean })
+      });
+      if (!response.ok) throw new Error('speak failed: ' + response.status);
+      const url = URL.createObjectURL(await response.blob());
+      if (run !== speechRun) return URL.revokeObjectURL(url);
+      audio = player;
+      audio.onended = audio.onerror = () => { URL.revokeObjectURL(url); done(); };
+      audio.src = url;
+      await audio.play();
+      return;
+    } catch (err) {
+      player.onended = player.onerror = null;
+      audio = null;   // no key, no credits or no server: use the browser's own voice instead
+    }
+    if (run !== speechRun) return;
+
+    // 2) The browser's built-in Turkish voice
+    if (!('speechSynthesis' in window)) return done();
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.lang = 'tr-TR';
+    const voices = speechSynthesis.getVoices().filter(v => v.lang.toLowerCase().startsWith('tr'));
+    utterance.voice = voices.find(v => /emel|seda|filiz|female/i.test(v.name)) ||   // a female voice if there is one
+      voices.find(v => /natural|online/i.test(v.name)) || voices[0] || null;
+    utterance.onend = utterance.onerror = done;
+    speechSynthesis.speak(utterance);
+  }
+  function stopSpeaking() {
+    speechRun++;
+    if (audio) { audio.onended = audio.onerror = null; audio.pause(); audio = null; }
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    if (state === 'speaking') { setState(restingState()); resumeListening(); }
+  }
+  if ('speechSynthesis' in window) speechSynthesis.getVoices();   // voices load in the background
+
+  // --- Listening: wait for "Jarvis", then take the question that follows ---
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null, recognizing = false, wakeIndex = 0, resultCount = 0, silenceTimer = null;
+
+  function buildRecognition() {
+    const rec = new Recognition();
+    rec.lang = 'tr-TR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onstart = () => { recognizing = true; resultCount = 0; };
+    rec.onresult = e => {
+      resultCount = e.results.length;
+      if (state === 'wake') {
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (WAKE_WORD.test(e.results[i][0].transcript)) {
+            wakeIndex = i;
+            setState('capture');
+            micHint.textContent = HINT_CAPTURE;
+            break;
+          }
+        }
+        // Show what was heard, so a misheard "Jarvis" is easy to spot
+        if (state === 'wake') {
+          micHint.textContent = 'Duyduğum: “' + e.results[e.results.length - 1][0].transcript.trim().slice(-60) + '”';
+        }
+      }
+      if (state !== 'capture') return;
+      let heard = '';
+      for (let i = wakeIndex; i < e.results.length; i++) heard += e.results[i][0].transcript + ' ';
+      const wake = heard.match(WAKE_WORD);
+      const question = (wake ? heard.slice(wake.index + wake[0].length) : heard).replace(/^[\s,.:;!?]+/, '').trim();
+      askInput.value = question;
+      clearTimeout(silenceTimer);
+      // The question ends after a short silence; with nothing said, go back to waiting.
+      silenceTimer = setTimeout(() => finishCapture(question), question ? 1800 : 6000);
+    };
+    rec.onerror = e => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture') {
+        micOn = false;
+        setState('standby');
+        micHint.textContent = e.error === 'audio-capture'
+          ? 'Mikrofon bulunamadı. Yazarak sorabilirsin.'
+          : 'Mikrofon izni verilmedi. Adres çubuğundaki kilit simgesinden izin ver ya da yazarak sor.';
+      } else if (e.error === 'network' || e.error === 'language-not-supported') {
+        micOn = false;
+        setState('standby');
+        micHint.textContent = 'Bu tarayıcıda ses tanıma çalışmıyor (' + e.error + '). Chrome ya da Edge ile dene.';
+      }
+    };
+    rec.onend = () => {
+      recognizing = false;
+      if (state === 'capture') finishCapture(askInput.value.trim());
+      if (micOn && state === 'wake') setTimeout(resumeListening, 300);   // the browser stops listening now and then
+    };
+    return rec;
+  }
+  function finishCapture(question) {
+    clearTimeout(silenceTimer);
+    if (state !== 'capture') return;
+    if (question) { ask(question); return; }
+    setState('wake');
+    micHint.textContent = HINT_WAKE;
+  }
+  // Microphone check: which device the browser listens to, and whether any sound arrives from it.
+  // (Speech recognition always uses the browser's own microphone choice; a page cannot pick it.)
+  let micStream = null, micLabel = '', lastSound = 0, micMeter = null, micCheck = null;
+  async function watchMicrophone() {
+    if (micStream || !navigator.mediaDevices) return;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micLabel = (micStream.getAudioTracks()[0].label || 'bilinmeyen mikrofon').replace(/^(Default|Varsayılan)\s*-\s*/i, '');
+      const context = new AudioContext();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 512;
+      context.createMediaStreamSource(micStream).connect(analyser);
+      const samples = new Uint8Array(analyser.fftSize);
+      micMeter = setInterval(() => {
+        analyser.getByteTimeDomainData(samples);
+        if (samples.some(s => Math.abs(s - 128) > 6)) lastSound = Date.now();
+      }, 100);
+      if (state === 'capture' && !askInput.value) micHint.textContent = HINT_CAPTURE + ' · ' + micLabel;
+    } catch (err) { micStream = null; }
+  }
+  function stopMicrophoneWatch() {
+    clearInterval(micMeter);
+    clearTimeout(micCheck);
+    if (micStream) micStream.getTracks().forEach(track => track.stop());
+    micStream = null;
+  }
+
+  // Start taking a question right away (ring clicked): no wake word and no second click needed
+  function startCapture() {
+    askInput.value = '';
+    wakeIndex = recognizing ? resultCount : 0;
+    setState('capture');
+    micHint.textContent = micLabel ? HINT_CAPTURE + ' · ' + micLabel : HINT_CAPTURE;
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => finishCapture(''), 8000);
+    resumeListening();
+    watchMicrophone();
+    // Nothing recognised after a few seconds: say whether the microphone is silent or the recognition is failing
+    const started = Date.now();
+    clearTimeout(micCheck);
+    micCheck = setTimeout(() => {
+      if (state !== 'capture' || askInput.value || !micLabel) return;
+      micHint.textContent = lastSound > started
+        ? 'Ses geliyor (' + micLabel + ') ama yazıya çevrilemedi. İnternet bağlantını kontrol et.'
+        : 'Ses gelmiyor. Dinlenen mikrofon: ' + micLabel + '. Yanlışsa Jarvis-Mikrofon.bat ile değiştir.';
+    }, 4500);
+  }
+  function resumeListening() {
+    if (!micOn || recognizing || (state !== 'wake' && state !== 'capture')) return;
+    try { recognition.start(); } catch (err) { /* already starting */ }
+  }
+  function pauseListening() {
+    clearTimeout(silenceTimer);
+    if (recognition && recognizing) recognition.abort();
+  }
+
+  document.getElementById('ring').addEventListener('click', () => {
+    if (state === 'speaking') { stopSpeaking(); return; }
+    if (!Recognition) {
+      micHint.textContent = 'Bu tarayıcı ses tanımayı desteklemiyor. Chrome ya da Edge ile aç ya da yazarak sor.';
+      return;
+    }
+    if (state === 'thinking') return;
+    if (state === 'capture') {   // clicked while listening for a question: turn the microphone off
+      micOn = false;
+      setState('standby');
+      pauseListening();
+      stopMicrophoneWatch();
+      askInput.value = '';
+      micHint.textContent = HINT_OFF;
+      return;
+    }
+    micOn = true;
+    recognition = recognition || buildRecognition();
+    startCapture();
+  });
+
+  // Note panel
+  const panel = document.getElementById('note');
+  const body = document.getElementById('body');
+  document.getElementById('close').addEventListener('click', closeNote);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNote(); });
+  body.addEventListener('click', e => {
+    const link = e.target.closest('a.wl');
+    if (!link) return;
+    const node = byId.get(link.dataset.id.toLowerCase());
+    if (node) openNote(node);
+  });
+
+  function openNote(node) {
+    controls.autoRotate = false;
+    selectedNode = node;
+    refreshColors();
+    const distance = node.isHub ? 220 : 140;
+    const ratio = 1 + distance / (Math.hypot(node.x, node.y, node.z) || 1);
+    Graph.cameraPosition({ x: node.x * ratio, y: node.y * ratio, z: node.z * ratio }, node, 1500);
+
+    const folder = document.getElementById('note-folder');
+    folder.style.setProperty('--c', toneVar(node));
+    folder.innerHTML = '<i></i>' + esc(node.isHub ? 'Ana başlık' : node.path + '  ·  ' + node.hub);
+    document.getElementById('note-title').textContent = node.title;
+    document.getElementById('note-meta').textContent =
+      [node.isHub ? '' : node.type, node.created, (degree[node.id] || 0) + ' bağlantı'].filter(Boolean).join(' · ');
+    document.getElementById('note-tags').innerHTML =
+      (node.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
+
+    let markdown = node.content || '';
+    if (node.isHub) {
+      const members = nodes.filter(n => n.hub === node.id && !n.isHub)
+        .sort((a, b) => a.title.localeCompare(b.title, 'tr'));
+      markdown += '\n\n## Bu başlığa bağlı notlar\n' + members.map(n => '- [[' + n.id + '|' + n.title + ']]').join('\n');
+    }
+    body.innerHTML = renderMarkdown(markdown);
+    body.scrollTop = 0;
+    panel.classList.add('open');
+  }
+
+  function closeNote() {
+    if (!panel.classList.contains('open')) return;
+    panel.classList.remove('open');
+    selectedNode = null;
+    refreshColors();
+    controls.autoRotate = true;
+    showAll(1200);
+  }
+
+  // Small markdown renderer: headings, lists, tables, bold, italic, code, [[links]]
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+  function inline(s) {
+    return esc(s)
+      .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g, (m, target, alias) => {
+        const node = byId.get(target.trim().toLowerCase());
+        const label = (alias || target).trim();
+        return node
+          ? '<a class="wl" data-id="' + esc(node.id) + '">' + label + '</a>'
+          : '<span class="missing">' + label + '</span>';
+      })
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/(^|[\s(])_(.+?)_(?=[\s).,;:]|$)/g, '$1<em>$2</em>');
+  }
+  function renderMarkdown(text) {
+    const lines = text.replace(/^[^-]?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').split(/\r?\n/);
+    const out = [];
+    let listTag = null, inTable = false;
+    const endBlocks = () => {
+      if (listTag) { out.push('</' + listTag + '>'); listTag = null; }
+      if (inTable) { out.push('</table>'); inTable = false; }
+    };
+    for (const raw of lines) {
+      const line = raw.trim();
+      let m;
+      if (!line) { endBlocks(); continue; }
+      if ((m = line.match(/^(#{1,3})\s+(.*)$/))) {
+        endBlocks();
+        out.push('<h' + m[1].length + '>' + inline(m[2]) + '</h' + m[1].length + '>');
+      } else if ((m = line.match(/^(?:[-*]|(\d+)\.)\s+(.*)$/))) {
+        const tag = m[1] ? 'ol' : 'ul';
+        if (listTag !== tag) { endBlocks(); out.push('<' + tag + '>'); listTag = tag; }
+        out.push('<li>' + inline(m[2]) + '</li>');
+      } else if (line.startsWith('|')) {
+        const cells = line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        if (cells.every(c => /^:?-+:?$/.test(c))) continue;
+        const cell = inTable ? 'td' : 'th';
+        if (!inTable) { endBlocks(); out.push('<table>'); inTable = true; }
+        out.push('<tr>' + cells.map(c => '<' + cell + '>' + inline(c) + '</' + cell + '>').join('') + '</tr>');
+      } else {
+        endBlocks();
+        out.push('<p>' + inline(line) + '</p>');
+      }
+    }
+    endBlocks();
+    return out.join('');
+  }
+})();
+</script>
+</body>
+</html>
